@@ -32,3 +32,21 @@ public type WorkOrder record {
     string description;
     Task[] task?;
 };
+
+public type Asset record {
+    string assetTag;
+    string name;
+    string description;
+    string institution;
+    string site;
+    string status;
+    string dateAcquired;
+    Componet[] componenets?;
+    Schedule[] schedules?;
+    WorkOrder[] workOrders?;
+};
+
+// Main Menu
+public function main() {
+    io:println("Library  Resource Management CLI");
+}
