@@ -1,1 +1,1 @@
-PLEASE DO NOT MAKE ANY ADDITIONS TO THIS PROJECT AS OF YET
+Distributed Food Delivery Platform

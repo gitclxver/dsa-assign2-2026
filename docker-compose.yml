@@ -1,0 +1,152 @@
+services:
+  # Infrastructure
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
+  # Topics with 3 partitions each.
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        for t in orders.created payments.completed delivery.assigned delivery.completed; do
+          kafka-topics --create --if-not-exists --topic $$t --bootstrap-server kafka:9092 --partitions 3 --replication-factor 1
+        done
+        echo 'topics created'
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Microservices
+  customer-service:
+    build: ./customer-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "9091:9091"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+
+  restaurant-service:
+    build: ./restaurant-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+
+  order-service:
+    build: ./order-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "9093:9093"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      KAFKA_URL: kafka:9092
+
+  payment-service:
+    build: ./payment-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      KAFKA_URL: kafka:9092
+
+  delivery-service:
+    build: ./delivery-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "9095:9095"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      KAFKA_URL: kafka:9092
+
+  notification-service:
+    build: ./notification-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      KAFKA_URL: kafka:9092
+
+  admin-service:
+    build: ./admin-service
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "9097:9097"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+
+volumes:
+  mongo-data:

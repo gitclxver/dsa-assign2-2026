@@ -1,0 +1,7 @@
+target/
+Dependencies.toml
+*.jar
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
