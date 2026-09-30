@@ -144,7 +144,7 @@ function recordRestaurantOrder(json event) {
     string restaurantName = firstString(event, ["restaurantName", "restaurant_name", "restaurantId", "restaurant_id"], "Unknown restaurant");
     decimal? amount = firstDecimal(event, ["totalAmount", "amount", "total", "price"]);
 
-    RestaurantStats? existing = restaurantStats.get(restaurantId);
+    RestaurantStats? existing = restaurantStats[restaurantId];
     if existing is () {
         RestaurantStats created = {
             name: restaurantName,
@@ -194,7 +194,7 @@ function printRestaurantReport() {
     }
 
     foreach string restaurantId in restaurantStats.keys() {
-        RestaurantStats? stats = restaurantStats.get(restaurantId);
+        RestaurantStats? stats = restaurantStats[restaurantId];
         if stats is RestaurantStats {
             string sales = stats.grossSales.toString();
             io:println(stats.name, " [", restaurantId, "] — orders: ", stats.orders,
@@ -237,7 +237,7 @@ function printDeliveryReport() {
 function firstString(json event, string[] fieldNames, string fallback) returns string {
     if event is map<json> {
         foreach string fieldName in fieldNames {
-            json? value = event.get(fieldName);
+            json? value = event[fieldName];
             if value is string || value is int || value is decimal || value is float {
                 return value.toString();
             }
@@ -250,7 +250,7 @@ function firstString(json event, string[] fieldNames, string fallback) returns s
 function firstDecimal(json event, string[] fieldNames) returns decimal? {
     if event is map<json> {
         foreach string fieldName in fieldNames {
-            json? value = event.get(fieldName);
+            json? value = event[fieldName];
             if value is int {
                 return <decimal>value;
             } else if value is decimal {
@@ -267,7 +267,7 @@ function firstDecimal(json event, string[] fieldNames) returns decimal? {
 function firstBoolean(json event, string[] fieldNames) returns boolean? {
     if event is map<json> {
         foreach string fieldName in fieldNames {
-            json? value = event.get(fieldName);
+            json? value = event[fieldName];
             if value is boolean {
                 return value;
             }

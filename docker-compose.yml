@@ -139,14 +139,15 @@ services:
 
   admin-service:
     build: ./admin-service
-    restart: on-failure
     depends_on:
-      mongodb:
+      kafka:
         condition: service_healthy
-    ports:
-      - "9097:9097"
+      kafka-init:
+        condition: service_completed_successfully
+    stdin_open: true
+    tty: true
     environment:
-      MONGO_URL: mongodb://mongodb:27017
+      KAFKA_URL: kafka:9092
 
 volumes:
   mongo-data:
