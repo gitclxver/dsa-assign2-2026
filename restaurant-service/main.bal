@@ -1,341 +1,125 @@
 import ballerina/http;
-import ballerina/log;
 import ballerina/os;
+import ballerina/uuid;
 import ballerinax/mongodb;
 
-// Restaurant information
+function env(string name, string fallback) returns string {
+    string value = os:getEnv(name);
+    return value == "" ? fallback : value;
+}
+
+final string mongoUrl = env("MONGO_URL", "mongodb://localhost:27017");
+
+final mongodb:Client mongo = check new ({connection: mongoUrl});
+final mongodb:Collection restaurants = check collection("restaurants");
+final mongodb:Collection orders = check collection("orders");
+
+function collection(string name) returns mongodb:Collection|error {
+    mongodb:Database db = check mongo->getDatabase("fooddelivery");
+    return db->getCollection(name);
+}
+
+function prefixedId(string prefix) returns string {
+    return string `${prefix}-${uuid:createType1AsString().substring(0, 8)}`;
+}
+
+type MenuItem record {|
+    string name;
+    decimal price;
+    int stock;
+|};
+
 type Restaurant record {|
     string id;
     string name;
-    string address;
-    boolean kitchenOpen;
+    string openHours;
+    MenuItem[] menu;
 |};
 
-// Menu item information
-type MenuItem record {|
-    string id;
-    string restaurantId;
+type NewRestaurant record {|
     string name;
-    string description;
-    decimal price;
-    int stock;
-    boolean available;
+    string openHours;
+    MenuItem[] menu;
 |};
 
-const string DB_NAME = "restaurant_db";
-
-string mongoUrl = envOr("MONGO_URL", "mongodb://mongodb:27017");
-
-mongodb:Client mongoClient = check new({
-    connection: mongoUrl
-});
-
-mongodb:Collection restaurants = openCollection("restaurants");
-mongodb:Collection menuItems = openCollection("menuItems");
-
-
-// Get a value from the environment, or use a default value
-function envOr(string name, string defaultValue) returns string {
-    string|error value = os:getEnv(name);
-
-    if value is string && value != "" {
-        return value;
-    }
-
-    return defaultValue;
-}
-
-
-// Connect to a MongoDB collection
-function openCollection(string collectionName) returns mongodb:Collection {
-    return mongoClient.getDatabase(DB_NAME).getCollection(collectionName);
-}
-
-
-// Create the indexes and add sample data when the service starts
-function init() returns error? {
-    check restaurants.createIndex({
-        key: { id: 1 },
-        name: "restaurant_id_unique",
-        unique: true
-    });
-
-    check menuItems.createIndex({
-        key: { id: 1 },
-        name: "menu_item_id_unique",
-        unique: true
-    });
-
-    check addSampleData();
-
-    log:printInfo("Restaurant service started");
-}
-
-
-// Add sample restaurant and menu data if the database is empty
-function addSampleData() returns error? {
-    mongodb:Record{}|error restaurantCount = check restaurants.countDocuments({});
-
-    if restaurantCount is int && restaurantCount == 0 {
-        Restaurant restaurant = {
-            id: "rest-001",
-            name: "Kasi Burger",
-            address: "Windhoek",
-            kitchenOpen: true
-        };
-
-        check restaurants.insertOne(restaurant);
-    }
-
-    mongodb:Record{}|error menuCount = check menuItems.countDocuments({});
-
-    if menuCount is int && menuCount == 0 {
-        MenuItem item = {
-            id: "item-001",
-            restaurantId: "rest-001",
-            name: "Kasi Burger",
-            description: "Burger with chips",
-            price: 14.00,
-            stock: 20,
-            available: true
-        };
-
-        check menuItems.insertOne(item);
+// Restaurant Service: digital menus, inventory and opening hours.
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: ["*"]
     }
 }
+service /restaurants on new http:Listener(9092) {
 
-
-// Find a restaurant using its ID
-function findRestaurant(string restaurantId) returns Restaurant|error? {
-    mongodb:Document|error result = restaurants.findOne({
-        id: restaurantId
-    });
-
-    if result is mongodb:Document {
-        return result.cloneWithType(Restaurant);
-    }
-
-    return result;
-}
-
-
-// Find a menu item using its ID
-function findMenuItem(string itemId) returns MenuItem|error? {
-    mongodb:Document|error result = menuItems.findOne({
-        id: itemId
-    });
-
-    if result is mongodb:Document {
-        return result.cloneWithType(MenuItem);
-    }
-
-    return result;
-}
-
-
-// Check if the restaurant service is running
-resource function get health() returns string {
-    return "Restaurant service is running";
-}
-
-
-// Get restaurant details
-resource function get restaurants/[string restaurantId]() returns Restaurant|http:NotFound {
-    Restaurant|error? restaurant = findRestaurant(restaurantId);
-
-    if restaurant is Restaurant {
+    resource function post .(NewRestaurant input) returns Restaurant|error {
+        Restaurant restaurant = {id: prefixedId("restaurant"), ...input};
+        check restaurants->insertOne(restaurant);
         return restaurant;
     }
 
-    return http:NOT_FOUND;
-}
-
-
-// Open or close the restaurant kitchen
-resource function put restaurants/[string restaurantId]/kitchen(
-    boolean kitchenOpen
-) returns Restaurant|http:NotFound {
-    Restaurant|error? restaurant = findRestaurant(restaurantId);
-
-    if restaurant is () || restaurant is error {
-        return http:NOT_FOUND;
+    resource function get .() returns Restaurant[]|error {
+        stream<Restaurant, error?> result = check restaurants->find();
+        return from Restaurant r in result select r;
     }
 
-    mongodb:UpdateResult|error result = restaurants.updateOne(
-        {id: restaurantId},
-        {set: {kitchenOpen: kitchenOpen}}
-    );
-
-    if result is error {
-        return http:NOT_FOUND;
-    }
-
-    restaurant.kitchenOpen = kitchenOpen;
-    return restaurant;
-}
-
-
-// Get all menu items for a restaurant
-resource function get restaurants/[string restaurantId]/menu()
-    returns MenuItem[]|http:NotFound {
-
-    Restaurant|error? restaurant = findRestaurant(restaurantId);
-
-    if restaurant is () || restaurant is error {
-        return http:NOT_FOUND;
-    }
-
-    mongodb:Document[]|error result = menuItems.findMany({
-        restaurantId: restaurantId
-    });
-
-    if result is error {
-        return http:NOT_FOUND;
-    }
-
-    MenuItem[] items = [];
-
-    foreach mongodb:Document document in result {
-        MenuItem|error item = document.cloneWithType(MenuItem);
-
-        if item is MenuItem {
-            items.push(item);
+    resource function get [string id]() returns Restaurant|http:NotFound|error {
+        Restaurant? restaurant = check restaurants->findOne({id});
+        if restaurant is () {
+            return http:NOT_FOUND;
         }
+        return restaurant;
     }
 
-    return items;
-}
-
-
-// Add a new item to a restaurant menu
-resource function post restaurants/[string restaurantId]/menu(
-    MenuItem item
-) returns MenuItem|http:BadRequest|http:NotFound {
-
-    if item.id == "" || item.name == "" {
-        return http:BAD_REQUEST;
-    }
-
-    if item.price < 0 || item.stock < 0 {
-        return http:BAD_REQUEST;
-    }
-
-    Restaurant|error? restaurant = findRestaurant(restaurantId);
-
-    if restaurant is () || restaurant is error {
-        return http:NOT_FOUND;
-    }
-
-    item.restaurantId = restaurantId;
-
-    MenuItem|error existingItem = findMenuItem(item.id);
-
-    if existingItem is MenuItem {
-        return http:BAD_REQUEST;
-    }
-
-    mongodb:InsertResult|error result = menuItems.insertOne(item);
-
-    if result is error {
-        return http:BAD_REQUEST;
-    }
-
-    return item;
-}
-
-
-// Update an existing menu item
-resource function put menu/[string itemId](
-    MenuItem item
-) returns MenuItem|http:BadRequest|http:NotFound {
-
-    if item.name == "" || item.price < 0 || item.stock < 0 {
-        return http:BAD_REQUEST;
-    }
-
-    MenuItem|error? existingItem = findMenuItem(itemId);
-
-    if existingItem is () || existingItem is error {
-        return http:NOT_FOUND;
-    }
-
-    mongodb:UpdateResult|error result = menuItems.updateOne(
-        {id: itemId},
-        {
-            set: {
-                name: item.name,
-                description: item.description,
-                price: item.price,
-                stock: item.stock,
-                available: item.available
-            }
+    resource function get [string id]/menu() returns MenuItem[]|http:NotFound|error {
+        Restaurant? restaurant = check restaurants->findOne({id});
+        if restaurant is () {
+            return http:NOT_FOUND;
         }
-    );
-
-    if result is error {
-        return http:BAD_REQUEST;
+        return restaurant.menu;
     }
 
-    item.id = itemId;
-    item.restaurantId = existingItem.restaurantId;
-
-    return item;
-}
-
-
-// Delete a menu item
-resource function delete menu/[string itemId]() returns string|http:NotFound {
-    mongodb:DeleteResult|error result = menuItems.deleteOne({
-        id: itemId
-    });
-
-    if result is error {
-        return http:NOT_FOUND;
-    }
-
-    return "Menu item deleted";
-}
-
-
-// Change the stock level of a menu item
-resource function put menu/[string itemId]/inventory(
-    int stock
-) returns MenuItem|http:BadRequest|http:NotFound {
-
-    if stock < 0 {
-        return http:BAD_REQUEST;
-    }
-
-    MenuItem|error? existingItem = findMenuItem(itemId);
-
-    if existingItem is () || existingItem is error {
-        return http:NOT_FOUND;
-    }
-
-    boolean available = stock > 0;
-
-    mongodb:UpdateResult|error result = menuItems.updateOne(
-        {id: itemId},
-        {
-            set: {
-                stock: stock,
-                available: available
-            }
+    resource function put [string id](NewRestaurant input) returns Restaurant|http:NotFound|error {
+        mongodb:UpdateResult result = check restaurants->updateOne({id}, {set: input});
+        if result.matchedCount == 0 {
+            return http:NOT_FOUND;
         }
-    );
-
-    if result is error {
-        return http:BAD_REQUEST;
+        return {id, ...input};
     }
 
-    existingItem.stock = stock;
-    existingItem.available = available;
+    resource function delete [string id]() returns http:NoContent|http:NotFound|error {
+        mongodb:DeleteResult result = check restaurants->deleteOne({id});
+        if result.deletedCount == 0 {
+            return http:NOT_FOUND;
+        }
+        return http:NO_CONTENT;
+    }
 
-    return existingItem;
+    // Retrieve paid orders for a restaurant (earliest first / FIFO priority).
+    resource function get [string id]/orders(string? status) returns Order[]|error {
+        map<json> filter = {restaurantId: id};
+        if status is string && status != "" {
+            filter["status"] = status;
+        } else {
+            filter["status"] = "CONFIRMED";
+        }
+        stream<Order, error?> result = check orders->find(filter);
+        Order[] list = check from Order o in result select o;
+        return earliestFirst(list);
+    }
 }
 
+type Order record {
+    string id;
+    string customerId;
+    string restaurantId;
+    anydata items;
+    decimal total;
+    string status;
+};
 
-// Start the REST API on port 9092
-service /restaurant on new http:Listener(9092) {
-
+function earliestFirst(Order[] items) returns Order[] {
+    Order[] out = [];
+    foreach Order o in items {
+        out.push(o);
+    }
+    return out;
 }

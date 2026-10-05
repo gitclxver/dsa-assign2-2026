@@ -55,7 +55,7 @@ services:
       start_period: 5s
 
   # Microservices
-  customer-service:
+  customer:
     build: ./customer-service
     restart: on-failure
     depends_on:
@@ -66,7 +66,7 @@ services:
     environment:
       MONGO_URL: mongodb://mongodb:27017
 
-  restaurant-service:
+  restaurant:
     build: ./restaurant-service
     restart: on-failure
     depends_on:
@@ -77,7 +77,7 @@ services:
     environment:
       MONGO_URL: mongodb://mongodb:27017
 
-  order-service:
+  order:
     build: ./order-service
     restart: on-failure
     depends_on:
@@ -93,7 +93,7 @@ services:
       MONGO_URL: mongodb://mongodb:27017
       KAFKA_URL: kafka:9092
 
-  payment-service:
+  payment:
     build: ./payment-service
     restart: on-failure
     depends_on:
@@ -103,11 +103,13 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+    ports:
+      - "9094:9094"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       KAFKA_URL: kafka:9092
 
-  delivery-service:
+  delivery:
     build: ./delivery-service
     restart: on-failure
     depends_on:
@@ -123,7 +125,7 @@ services:
       MONGO_URL: mongodb://mongodb:27017
       KAFKA_URL: kafka:9092
 
-  notification-service:
+  notification:
     build: ./notification-service
     restart: on-failure
     depends_on:
@@ -133,21 +135,22 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+    ports:
+      - "9096:9096"
     environment:
       MONGO_URL: mongodb://mongodb:27017
       KAFKA_URL: kafka:9092
 
-  admin-service:
+  admin:
     build: ./admin-service
+    restart: on-failure
     depends_on:
-      kafka:
+      mongodb:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
-    stdin_open: true
-    tty: true
+    ports:
+      - "9097:9097"
     environment:
-      KAFKA_URL: kafka:9092
+      MONGO_URL: mongodb://mongodb:27017
 
 volumes:
   mongo-data:

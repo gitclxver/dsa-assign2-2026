@@ -5,4 +5,6 @@ Dependencies.toml
 .vscode/
 Thumbs.db
 .DS_Store
-.DSA612S-Assignment 2-2026-2.pdf
+__pycache__/
+*.pyc
+client/order_history.json

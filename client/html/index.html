@@ -1,11 +1,1638 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-</head>
-<body>
-    
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Food Delivery Platform - 3-Part Client</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .tab-active { border-b-2 border-indigo-600 text-indigo-600 font-semibold; }
+      .status-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+      .status-CREATED { background-color: #FEF3C7; color: #92400E; }
+      .status-CONFIRMED { background-color: #DBEAFE; color: #1E40AF; }
+      .status-PREPARING { background-color: #EDE9FE; color: #5B21B6; }
+      .status-READY { background-color: #CFFAFE; color: #155E75; }
+      .status-OUT_FOR_DELIVERY { background-color: #FCE7F3; color: #9D174D; }
+      .status-DELIVERED { background-color: #D1FAE5; color: #065F46; }
+      .status-CANCELLED { background-color: #FEE2E2; color: #991B1B; }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+    <!-- Header -->
+    <header class="bg-indigo-900 text-white shadow-lg">
+      <div
+        class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4"
+      >
+        <div class="flex items-center space-x-3">
+          <span class="text-3xl">🍔</span>
+          <div>
+            <h1 class="text-xl font-bold tracking-tight">
+              Food Delivery Platform
+            </h1>
+            <p class="text-xs text-indigo-200">
+              Ballerina Microservices &amp; Kafka Distributed System
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <!-- Global Live Surge Meter -->
+          <div
+            id="global-surge-badge"
+            class="bg-indigo-800/80 border border-indigo-600/50 rounded-xl px-4 py-2 flex items-center space-x-3 text-sm"
+          >
+            <span class="text-amber-400 font-bold text-lg"
+              >⚡ Surge Pricing:</span
+            >
+            <span
+              id="surge-multiplier-pill"
+              class="bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded-full text-xs"
+              >1.0x</span
+            >
+            <span id="surge-desc" class="text-xs text-indigo-200"
+              >Checking demand...</span
+            >
+          </div>
+          <!-- Live Notifications Header Pill -->
+          <button
+            onclick="switchTab('notifications')"
+            class="bg-indigo-800/80 hover:bg-indigo-700/80 border border-indigo-600/50 rounded-xl px-4 py-2 flex items-center space-x-2 text-sm transition"
+            title="View Live Event Notifications"
+          >
+            <span class="text-base">🔔</span>
+            <span class="text-xs text-indigo-200">Events:</span>
+            <span
+              id="header-notif-pill"
+              class="bg-amber-400 text-slate-900 font-extrabold px-2 py-0.5 rounded-full text-xs"
+              >0</span
+            >
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div
+        class="max-w-7xl mx-auto px-4 border-t border-indigo-800 flex space-x-8 text-sm"
+      >
+        <button
+          onclick="switchTab('customer')"
+          id="tab-btn-customer"
+          class="py-3 px-1 border-b-2 font-medium border-transparent text-indigo-200 hover:text-white transition"
+        >
+          🛒 1. Customer Ordering Portal
+        </button>
+        <button
+          onclick="switchTab('operations')"
+          id="tab-btn-operations"
+          class="py-3 px-1 border-b-2 font-medium border-transparent text-indigo-200 hover:text-white transition"
+        >
+          🍳 2. Kitchen &amp; Driver Operations
+        </button>
+        <button
+          onclick="switchTab('admin')"
+          id="tab-btn-admin"
+          class="py-3 px-1 border-b-2 font-medium border-transparent text-indigo-200 hover:text-white transition"
+        >
+          📊 3. Admin Analytics &amp; Reports
+        </button>
+        <button
+          onclick="switchTab('notifications')"
+          id="tab-btn-notifications"
+          class="py-3 px-1 border-b-2 font-medium border-transparent text-indigo-200 hover:text-white transition"
+        >
+          🔔 4. Live Events &amp; Notifications
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Body -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+      <!-- PART 1: CUSTOMER PORTAL -->
+      <section id="panel-customer" class="space-y-6">
+        <!-- Top controls: Customer Selector & Surge Info -->
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-4"
+        >
+          <div class="flex items-center space-x-3">
+            <label class="text-sm font-semibold text-slate-700"
+              >Ordering as Customer:</label
+            >
+            <select
+              id="cust-select"
+              onchange="onCustomerChange()"
+              class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Loading customers...</option>
+            </select>
+            <span
+              id="cust-address-display"
+              class="text-xs text-slate-500 italic"
+            ></span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button
+              onclick="refreshCustomerData()"
+              class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition"
+            >
+              Refresh Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Main ordering grid: Restaurants (Left) vs Cart (Right) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Restaurant & Menu List -->
+          <div class="lg:col-span-2 space-y-4">
+            <h2
+              class="text-lg font-bold text-slate-800 flex items-center justify-between"
+            >
+              <span>Explore Restaurants &amp; Menus</span>
+              <span
+                id="restaurant-count-pill"
+                class="text-xs font-normal text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full"
+                >0 places</span
+              >
+            </h2>
+            <div id="restaurants-container" class="space-y-4">
+              <p class="text-sm text-slate-500 py-8 text-center">
+                Loading restaurants...
+              </p>
+            </div>
+          </div>
+
+          <!-- Cart & Checkout -->
+          <div class="space-y-4">
+            <div
+              class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 sticky top-4 space-y-4"
+            >
+              <h3
+                class="text-md font-bold text-slate-800 border-b pb-2 flex justify-between items-center"
+              >
+                <span>Your Cart</span>
+                <button
+                  onclick="clearCart()"
+                  class="text-xs text-rose-600 hover:underline"
+                >
+                  Clear
+                </button>
+              </h3>
+
+              <div
+                id="cart-restaurant-name"
+                class="text-xs font-semibold text-indigo-700"
+              ></div>
+
+              <div id="cart-items" class="space-y-2 max-h-64 overflow-y-auto">
+                <p class="text-xs text-slate-400 py-4 text-center">
+                  Your cart is empty.<br />Add items from any menu!
+                </p>
+              </div>
+
+              <!-- Price Breakdown with Dynamic Surge -->
+              <div class="border-t pt-3 space-y-1.5 text-xs">
+                <div class="flex justify-between text-slate-600">
+                  <span>Subtotal:</span>
+                  <span id="cart-subtotal">$0.00</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-600">
+                  <span class="flex items-center gap-1">
+                    Surge Multiplier:
+                    <span
+                      id="cart-surge-badge"
+                      class="bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded text-[10px]"
+                      >1.0x</span
+                    >
+                  </span>
+                  <span id="cart-surge-amount">+$0.00</span>
+                </div>
+                <div
+                  class="flex justify-between font-bold text-sm text-slate-900 border-t pt-2"
+                >
+                  <span>Total:</span>
+                  <span id="cart-total">$0.00</span>
+                </div>
+              </div>
+
+              <button
+                id="btn-place-order"
+                onclick="placeOrder()"
+                disabled
+                class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm shadow transition"
+              >
+                Place Order Now!
+              </button>
+
+              <!-- Active Order Live Tracking Box -->
+              <div
+                id="active-order-box"
+                class="hidden mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2"
+              >
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-bold text-indigo-900"
+                    >Live Order Status:</span
+                  >
+                  <span
+                    id="active-order-status"
+                    class="status-badge status-CREATED"
+                    >CREATED</span
+                  >
+                </div>
+                <p
+                  class="text-[11px] text-indigo-700 truncate"
+                  id="active-order-id-label"
+                ></p>
+                <div
+                  class="flex justify-between items-center text-xs pt-1 border-t border-indigo-100"
+                >
+                  <span class="text-[11px] font-semibold text-indigo-900"
+                    >Payment Status:</span
+                  >
+                  <span
+                    id="active-order-payment-badge"
+                    class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800"
+                    >Processing...</span
+                  >
+                </div>
+                <div id="active-order-pay-container"></div>
+                <div
+                  class="w-full bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden"
+                >
+                  <div
+                    id="active-order-progbar"
+                    class="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                    style="width: 15%"
+                  ></div>
+                </div>
+              </div>
+
+              <div class="mt-4 border-t pt-3 space-y-2">
+                <div class="flex justify-between items-center">
+                  <h4 class="text-sm font-bold text-slate-800">
+                    Order History
+                  </h4>
+                  <button
+                    onclick="loadOrderHistory()"
+                    class="text-[11px] text-indigo-600 hover:underline"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <div
+                  id="order-history-list"
+                  class="space-y-2 max-h-48 overflow-y-auto"
+                >
+                  <p class="text-xs text-slate-400 text-center py-2">
+                    No orders yet.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PART 2: RESTAURANT & DRIVER OPERATIONS -->
+      <section id="panel-operations" class="hidden space-y-6">
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center"
+        >
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">
+              Operational Dispatch &amp; Kitchen Board
+            </h2>
+            <p class="text-xs text-slate-500">
+              Advance order state machine manually or complete delivery driver
+              assignments.
+            </p>
+          </div>
+          <button
+            onclick="loadOperationsData()"
+            class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition"
+          >
+            Refresh Operations
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Kitchen Orders -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3
+              class="text-md font-bold text-slate-800 flex justify-between items-center border-b pb-2"
+            >
+              <span
+                >Kitchen Orders (Priority: Earliest Orders First / FIFO)</span
+              >
+              <span
+                id="kitchen-order-count"
+                class="text-xs font-normal bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full"
+                >0</span
+              >
+            </h3>
+            <div
+              id="kitchen-orders-list"
+              class="space-y-3 max-h-[600px] overflow-y-auto"
+            >
+              <p class="text-xs text-slate-500 text-center py-6">
+                Loading orders...
+              </p>
+            </div>
+          </div>
+
+          <!-- Driver Deliveries -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3
+              class="text-md font-bold text-slate-800 flex justify-between items-center border-b pb-2"
+            >
+              <span
+                >Driver Dispatch (Priority: Most Recent Delivery First /
+                LIFO)</span
+              >
+              <span
+                id="deliveries-count"
+                class="text-xs font-normal bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full"
+                >0</span
+              >
+            </h3>
+            <div
+              id="driver-deliveries-list"
+              class="space-y-3 max-h-[600px] overflow-y-auto"
+            >
+              <p class="text-xs text-slate-500 text-center py-6">
+                Loading deliveries...
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PART 3: ADMIN ANALYTICS & REPORTS -->
+      <section id="panel-admin" class="hidden space-y-6">
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center"
+        >
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">
+              Platform Analytics &amp; Admin Service
+            </h2>
+            <p class="text-xs text-slate-500">
+              Executive statistics, restaurant revenues, and delivery
+              performance metrics.
+            </p>
+          </div>
+          <button
+            onclick="loadAdminReports()"
+            class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition"
+          >
+            Refresh Reports
+          </button>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"
+          >
+            <p class="text-xs font-medium text-slate-500">
+              Total Lifetime Orders
+            </p>
+            <p
+              id="kpi-total-orders"
+              class="text-3xl font-extrabold text-indigo-600 mt-1"
+            >
+              0
+            </p>
+            <span class="text-[11px] text-slate-400">Order Service (9093)</span>
+          </div>
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"
+          >
+            <p class="text-xs font-medium text-slate-500">
+              Total Deliveries Tracked
+            </p>
+            <p
+              id="kpi-total-deliveries"
+              class="text-3xl font-extrabold text-emerald-600 mt-1"
+            >
+              0
+            </p>
+            <span class="text-[11px] text-slate-400"
+              >Delivery Service (9095)</span
+            >
+          </div>
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"
+          >
+            <p class="text-xs font-medium text-slate-500">
+              Total Payments Processed
+            </p>
+            <p
+              id="kpi-total-payments"
+              class="text-3xl font-extrabold text-teal-600 mt-1"
+            >
+              $0.00
+            </p>
+            <span class="text-[11px] text-slate-400"
+              >Payment Service (9094)</span
+            >
+          </div>
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200"
+          >
+            <p class="text-xs font-medium text-slate-500">
+              Kafka Event Notifications
+            </p>
+            <p
+              id="kpi-total-notifications"
+              class="text-3xl font-extrabold text-violet-600 mt-1"
+            >
+              0
+            </p>
+            <span class="text-[11px] text-slate-400"
+              >Notification Service (9096)</span
+            >
+          </div>
+        </div>
+
+        <!-- Detailed Breakdown Tables -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Restaurant Revenue -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3 class="text-md font-bold text-slate-800 border-b pb-2">
+              Restaurant Sales &amp; Revenue
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead
+                  class="text-[11px] uppercase bg-slate-100 text-slate-700"
+                >
+                  <tr>
+                    <th class="py-2.5 px-3">Restaurant</th>
+                    <th class="py-2.5 px-3 text-center">Orders</th>
+                    <th class="py-2.5 px-3 text-right">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="admin-restaurant-tbody"
+                  class="divide-y divide-slate-100"
+                >
+                  <tr>
+                    <td colspan="3" class="text-center py-4 text-slate-400">
+                      Loading restaurant reports...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Delivery Status Distribution -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3 class="text-md font-bold text-slate-800 border-b pb-2">
+              Delivery Performance Metrics
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead
+                  class="text-[11px] uppercase bg-slate-100 text-slate-700"
+                >
+                  <tr>
+                    <th class="py-2.5 px-3">Delivery Status</th>
+                    <th class="py-2.5 px-3 text-right">Count</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="admin-delivery-tbody"
+                  class="divide-y divide-slate-100"
+                >
+                  <tr>
+                    <td colspan="2" class="text-center py-4 text-slate-400">
+                      Loading delivery reports...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payments Ledger & Event Audit Log -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Payment Service Ledger -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3
+              class="text-md font-bold text-slate-800 border-b pb-2 flex justify-between items-center"
+            >
+              <span>💳 Payment Service Ledger (Port 9094)</span>
+              <span
+                id="admin-payments-count"
+                class="text-xs font-normal bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full"
+                >0 settled</span
+              >
+            </h3>
+            <div class="overflow-x-auto max-h-72 overflow-y-auto">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead
+                  class="text-[11px] uppercase bg-slate-100 text-slate-700 sticky top-0"
+                >
+                  <tr>
+                    <th class="py-2.5 px-3">Payment / Order</th>
+                    <th class="py-2.5 px-3 text-right">Amount</th>
+                    <th class="py-2.5 px-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="admin-payment-tbody"
+                  class="divide-y divide-slate-100"
+                >
+                  <tr>
+                    <td colspan="3" class="text-center py-4 text-slate-400">
+                      Loading payments...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Notification Service Audit Log -->
+          <div
+            class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+          >
+            <h3
+              class="text-md font-bold text-slate-800 border-b pb-2 flex justify-between items-center"
+            >
+              <span>🔔 Notification Audit Log (Port 9096)</span>
+              <span
+                id="admin-notifications-count"
+                class="text-xs font-normal bg-violet-100 text-violet-800 px-2 py-0.5 rounded-full"
+                >0 events</span
+              >
+            </h3>
+            <div class="overflow-x-auto max-h-72 overflow-y-auto">
+              <table class="w-full text-xs text-left text-slate-600">
+                <thead
+                  class="text-[11px] uppercase bg-slate-100 text-slate-700 sticky top-0"
+                >
+                  <tr>
+                    <th class="py-2.5 px-3">Time</th>
+                    <th class="py-2.5 px-3">Topic</th>
+                    <th class="py-2.5 px-3">Message</th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="admin-notification-tbody"
+                  class="divide-y divide-slate-100 font-mono text-[11px]"
+                >
+                  <tr>
+                    <td colspan="3" class="text-center py-4 text-slate-400">
+                      Loading notifications...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PART 4: LIVE EVENTS & NOTIFICATIONS -->
+      <section id="panel-notifications" class="hidden space-y-6">
+        <div
+          class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap justify-between items-center gap-4"
+        >
+          <div>
+            <h2
+              class="text-lg font-bold text-slate-800 flex items-center gap-2"
+            >
+              <span>🔔 Real-Time Event Notifications</span>
+              <span
+                id="live-notif-count-badge"
+                class="text-xs font-normal bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full"
+                >0 events</span
+              >
+            </h2>
+            <p class="text-xs text-slate-500">
+              Live stream of distributed Kafka events consumed and stored by
+              Notification Service (Port 9096).
+            </p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <select
+              id="notif-filter-topic"
+              onchange="filterNotifications()"
+              class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="ALL">All Event Topics</option>
+              <option value="orders.created">orders.created</option>
+              <option value="payments.completed">payments.completed</option>
+              <option value="delivery.assigned">delivery.assigned</option>
+              <option value="delivery.completed">delivery.completed</option>
+            </select>
+            <button
+              onclick="loadNotificationsData()"
+              class="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg border border-indigo-200 transition"
+            >
+              Refresh Feed
+            </button>
+          </div>
+        </div>
+
+        <div
+          class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4"
+        >
+          <div
+            id="notifications-live-container"
+            class="space-y-3 max-h-[650px] overflow-y-auto"
+          >
+            <p class="text-xs text-slate-400 text-center py-8">
+              Listening for Kafka events...
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer
+      class="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-500"
+    >
+      Distributed Food Delivery Platform &bull; Ballerina &bull; Apache Kafka
+      &bull; MongoDB &bull; Docker Compose
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+      const CUSTOMER_URL = "http://localhost:9091/customers";
+      const RESTAURANT_URL = "http://localhost:9092/restaurants";
+      const ORDER_URL = "http://localhost:9093/orders";
+      const PAYMENT_URL = "http://localhost:9094/payments";
+      const DELIVERY_URL = "http://localhost:9095/deliveries";
+      const NOTIFICATION_URL = "http://localhost:9096/notifications";
+      const ADMIN_URL = "http://localhost:9097/admin/reports";
+
+      let state = {
+        customers: [],
+        restaurants: [],
+        currentCustomer: null,
+        currentRestaurantId: null,
+        cart: [], // [{name, price, qty}]
+        surge: {
+          multiplier: 1.0,
+          demandLevel: "NORMAL",
+          activeLoad: 0,
+          reason: "",
+        },
+        activeOrderId: null,
+        activeOrderTimer: null,
+        notifications: [],
+      };
+
+      function switchTab(tab) {
+        ["customer", "operations", "admin", "notifications"].forEach((t) => {
+          const p = document.getElementById(`panel-${t}`);
+          const b = document.getElementById(`tab-btn-${t}`);
+          if (p) p.classList.add("hidden");
+          if (b) {
+            b.classList.remove("tab-active");
+            b.classList.add("border-transparent", "text-indigo-200");
+          }
+        });
+        const activeP = document.getElementById(`panel-${tab}`);
+        const activeB = document.getElementById(`tab-btn-${tab}`);
+        if (activeP) activeP.classList.remove("hidden");
+        if (activeB) {
+          activeB.classList.add("tab-active");
+          activeB.classList.remove("border-transparent", "text-indigo-200");
+        }
+
+        if (tab === "operations") loadOperationsData();
+        if (tab === "admin") loadAdminReports();
+        if (tab === "customer") refreshCustomerData();
+        if (tab === "notifications") loadNotificationsData();
+      }
+
+      async function fetchSurge() {
+        try {
+          const res = await fetch(`${ORDER_URL}/surge`);
+          if (res.ok) {
+            state.surge = await res.json();
+            updateSurgeUI();
+          }
+        } catch (e) {
+          console.warn("Surge fetch error", e);
+        }
+      }
+
+      function updateSurgeUI() {
+        const mult = state.surge.multiplier || 1.0;
+        const pill = document.getElementById("surge-multiplier-pill");
+        const desc = document.getElementById("surge-desc");
+        pill.textContent = `${mult.toFixed(2)}x`;
+        desc.textContent = state.surge.reason || "Standard pricing";
+
+        if (mult > 1.25) {
+          pill.className =
+            "bg-rose-500 text-white font-extrabold px-2.5 py-0.5 rounded-full text-xs animate-pulse";
+        } else if (mult > 1.0) {
+          pill.className =
+            "bg-amber-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded-full text-xs";
+        } else {
+          pill.className =
+            "bg-emerald-400 text-slate-900 font-extrabold px-2.5 py-0.5 rounded-full text-xs";
+        }
+        renderCart();
+      }
+
+      async function refreshCustomerData() {
+        await fetchSurge();
+        await loadCustomers();
+        await loadRestaurants();
+      }
+
+      async function loadCustomers() {
+        try {
+          const res = await fetch(CUSTOMER_URL);
+          if (res.ok) {
+            state.customers = await res.json();
+            const select = document.getElementById("cust-select");
+            select.innerHTML = state.customers
+              .map(
+                (c) =>
+                  `<option value="${c.id}">${c.name} (${c.email})</option>`,
+              )
+              .join("");
+            if (state.customers.length > 0) {
+              state.currentCustomer = state.customers[0];
+              onCustomerChange();
+            }
+          }
+        } catch (e) {
+          console.error("Failed loading customers:", e);
+        }
+      }
+
+      function onCustomerChange() {
+        const select = document.getElementById("cust-select");
+        const found = state.customers.find((c) => c.id === select.value);
+        if (found) {
+          state.currentCustomer = found;
+          const addrs = (found.addresses || []).join(", ");
+          document.getElementById("cust-address-display").textContent =
+            `📍 ${addrs}`;
+          loadOrderHistory();
+        }
+      }
+
+      async function loadRestaurants() {
+        try {
+          const res = await fetch(RESTAURANT_URL);
+          if (res.ok) {
+            state.restaurants = await res.json();
+            document.getElementById("restaurant-count-pill").textContent =
+              `${state.restaurants.length} places`;
+            renderRestaurants();
+          }
+        } catch (e) {
+          console.error("Failed loading restaurants:", e);
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function historyKey(customerId) {
+        return `orderHistory:${customerId || "anonymous"}`;
+      }
+
+      function loadLocalHistory(customerId) {
+        try {
+          return JSON.parse(
+            localStorage.getItem(historyKey(customerId)) || "[]",
+          );
+        } catch {
+          return [];
+        }
+      }
+
+      function saveLocalHistoryEntry(customerId, entry) {
+        const list = loadLocalHistory(customerId);
+        list.unshift(entry);
+        localStorage.setItem(
+          historyKey(customerId),
+          JSON.stringify(list.slice(0, 50)),
+        );
+      }
+
+      function renderRestaurants() {
+        const container = document.getElementById("restaurants-container");
+        if (state.restaurants.length === 0) {
+          container.innerHTML = `<div class="p-8 bg-white rounded-xl text-center text-slate-400 border">No restaurants found. Run the seed script to populate!</div>`;
+          return;
+        }
+
+        container.innerHTML = state.restaurants
+          .map(
+            (r, ri) => `
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 class="font-bold text-slate-800 text-base">${escapeHtml(r.name)}</h3>
+              <p class="text-xs text-slate-500">⏰ Hours: ${escapeHtml(r.openHours || "10:00 - 22:00")}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+            ${(r.menu || [])
+              .map(
+                (m, mi) => `
+              <div class="flex justify-between items-center p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:border-indigo-200 transition">
+                <div>
+                  <div class="font-medium text-xs text-slate-800">${escapeHtml(m.name)}</div>
+                  <div class="text-[11px] text-slate-500">$${Number(m.price).toFixed(2)}</div>
+                </div>
+                <button type="button" data-rest-idx="${ri}" data-item-idx="${mi}" class="add-to-cart-btn px-2.5 py-1 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 text-xs font-semibold rounded-md border border-indigo-200 transition">
+                  + Add
+                </button>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        </div>
+      `,
+          )
+          .join("");
+
+        container.querySelectorAll(".add-to-cart-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const rest = state.restaurants[Number(btn.dataset.restIdx)];
+            const item = (rest.menu || [])[Number(btn.dataset.itemIdx)];
+            if (rest && item) {
+              addToCart(rest.id, rest.name, item.name, item.price);
+            }
+          });
+        });
+      }
+
+      function addToCart(restId, restName, itemName, price) {
+        if (
+          state.currentRestaurantId &&
+          state.currentRestaurantId !== restId &&
+          state.cart.length > 0
+        ) {
+          if (
+            !confirm(
+              "Starting an order from a new restaurant will clear your current cart. Proceed?",
+            )
+          ) {
+            return;
+          }
+          state.cart = [];
+        }
+        state.currentRestaurantId = restId;
+        document.getElementById("cart-restaurant-name").textContent =
+          `From: ${restName}`;
+
+        const existing = state.cart.find((i) => i.name === itemName);
+        if (existing) {
+          existing.qty += 1;
+        } else {
+          state.cart.push({ name: itemName, price: Number(price), qty: 1 });
+        }
+        renderCart();
+      }
+
+      function updateCartQty(itemName, delta) {
+        const idx = state.cart.findIndex((i) => i.name === itemName);
+        if (idx !== -1) {
+          state.cart[idx].qty += delta;
+          if (state.cart[idx].qty <= 0) {
+            state.cart.splice(idx, 1);
+          }
+        }
+        if (state.cart.length === 0) {
+          state.currentRestaurantId = null;
+          document.getElementById("cart-restaurant-name").textContent = "";
+        }
+        renderCart();
+      }
+
+      function clearCart() {
+        state.cart = [];
+        state.currentRestaurantId = null;
+        document.getElementById("cart-restaurant-name").textContent = "";
+        renderCart();
+      }
+
+      function renderCart() {
+        const container = document.getElementById("cart-items");
+        const btn = document.getElementById("btn-place-order");
+
+        if (state.cart.length === 0) {
+          container.innerHTML = `<p class="text-xs text-slate-400 py-4 text-center">Your cart is empty.<br>Add items from any menu!</p>`;
+          document.getElementById("cart-subtotal").textContent = "$0.00";
+          document.getElementById("cart-surge-amount").textContent = "+$0.00";
+          document.getElementById("cart-total").textContent = "$0.00";
+          btn.disabled = true;
+          return;
+        }
+
+        btn.disabled = false;
+        container.innerHTML = "";
+        state.cart.forEach((item, idx) => {
+          const row = document.createElement("div");
+          row.className =
+            "flex justify-between items-center text-xs py-1 border-b border-slate-100";
+          row.innerHTML = `
+          <div class="flex-1">
+            <span class="font-medium text-slate-800">${escapeHtml(item.name)}</span>
+            <div class="text-[10px] text-slate-400">$${item.price.toFixed(2)} each</div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button type="button" data-delta="-1" class="qty-btn w-5 h-5 bg-slate-200 hover:bg-slate-300 rounded text-slate-700 font-bold flex items-center justify-center text-xs">-</button>
+            <span class="w-4 text-center font-semibold text-slate-800">${item.qty}</span>
+            <button type="button" data-delta="1" class="qty-btn w-5 h-5 bg-slate-200 hover:bg-slate-300 rounded text-slate-700 font-bold flex items-center justify-center text-xs">+</button>
+            <span class="w-12 text-right font-medium text-slate-800">$${(item.price * item.qty).toFixed(2)}</span>
+          </div>
+        `;
+          row.querySelectorAll(".qty-btn").forEach((btnEl) => {
+            btnEl.addEventListener("click", () =>
+              updateCartQty(item.name, Number(btnEl.dataset.delta)),
+            );
+          });
+          container.appendChild(row);
+        });
+
+        const subtotal = state.cart.reduce(
+          (sum, i) => sum + i.price * i.qty,
+          0,
+        );
+        const mult = state.surge.multiplier || 1.0;
+        const surgeAmt = subtotal * (mult - 1.0);
+        const total = subtotal * mult;
+
+        document.getElementById("cart-subtotal").textContent =
+          `$${subtotal.toFixed(2)}`;
+        document.getElementById("cart-surge-badge").textContent =
+          `${mult.toFixed(2)}x`;
+        document.getElementById("cart-surge-amount").textContent =
+          `+$${surgeAmt.toFixed(2)}`;
+        document.getElementById("cart-total").textContent =
+          `$${total.toFixed(2)}`;
+      }
+
+      async function loadOrderHistory() {
+        const container = document.getElementById("order-history-list");
+        if (!state.currentCustomer) {
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">Select a customer.</p>`;
+          return;
+        }
+
+        const local = loadLocalHistory(state.currentCustomer.id);
+        let server = [];
+        try {
+          const res = await fetch(
+            `${CUSTOMER_URL}/${state.currentCustomer.id}/orders`,
+          );
+          if (res.ok) {
+            server = await res.json();
+          }
+        } catch (e) {
+          console.warn("History fetch failed", e);
+        }
+
+        const byId = new Map();
+        [...local, ...server].forEach((o) => {
+          if (o && o.id && !byId.has(o.id)) {
+            byId.set(o.id, o);
+          }
+        });
+        const merged = Array.from(byId.values());
+
+        if (merged.length === 0) {
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-2">No orders yet.</p>`;
+          return;
+        }
+
+        container.innerHTML = merged
+          .map(
+            (o) => `
+        <div class="p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px] space-y-1">
+          <div class="flex justify-between gap-2">
+            <span class="font-mono text-slate-500 truncate">${escapeHtml(o.id)}</span>
+            <span class="status-badge status-${escapeHtml(o.status || "CREATED")}">${escapeHtml(o.status || "CREATED")}</span>
+          </div>
+          <div class="flex justify-between text-slate-700">
+            <span>$${Number(o.total || 0).toFixed(2)}</span>
+            <button type="button" data-order-id="${escapeHtml(o.id)}" class="track-history-btn text-indigo-600 hover:underline">Track</button>
+          </div>
+        </div>
+      `,
+          )
+          .join("");
+
+        container.querySelectorAll(".track-history-btn").forEach((btn) => {
+          btn.addEventListener("click", () => trackOrder(btn.dataset.orderId));
+        });
+      }
+
+      async function placeOrder() {
+        if (
+          !state.currentCustomer ||
+          !state.currentRestaurantId ||
+          state.cart.length === 0
+        )
+          return;
+
+        const btn = document.getElementById("btn-place-order");
+        btn.disabled = true;
+        btn.textContent = "Submitting Order...";
+
+        const subtotal = state.cart.reduce(
+          (sum, i) => sum + i.price * i.qty,
+          0,
+        );
+        const mult = state.surge.multiplier || 1.0;
+        const total = subtotal * mult;
+
+        const payload = {
+          customerId: state.currentCustomer.id,
+          restaurantId: state.currentRestaurantId,
+          items: state.cart.map((i) => ({
+            name: i.name,
+            qty: i.qty,
+            price: i.price,
+          })),
+          baseTotal: subtotal,
+          surgeMultiplier: mult,
+          total: total,
+        };
+
+        try {
+          const res = await fetch(ORDER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (res.ok) {
+            const order = await res.json();
+            saveLocalHistoryEntry(state.currentCustomer.id, {
+              id: order.id,
+              status: order.status,
+              total: order.total,
+              placedAt: new Date().toISOString(),
+            });
+            clearCart();
+            loadOrderHistory();
+            trackOrder(order.id);
+          } else {
+            alert("Failed to place order. See console.");
+          }
+        } catch (e) {
+          console.error("Order error:", e);
+          alert("Error submitting order.");
+        } finally {
+          btn.textContent = "Place Order Now!";
+          if (state.cart.length > 0) {
+            btn.disabled = false;
+          }
+        }
+      }
+
+      function trackOrder(orderId) {
+        state.activeOrderId = orderId;
+        const box = document.getElementById("active-order-box");
+        box.classList.remove("hidden");
+        document.getElementById("active-order-id-label").textContent =
+          `Order: ${orderId}`;
+
+        if (state.activeOrderTimer) clearInterval(state.activeOrderTimer);
+
+        const statusMap = {
+          CREATED: 15,
+          CONFIRMED: 35,
+          PREPARING: 55,
+          READY: 75,
+          OUT_FOR_DELIVERY: 90,
+          DELIVERED: 100,
+          CANCELLED: 100,
+        };
+
+        async function poll() {
+          try {
+            const res = await fetch(`${ORDER_URL}/${orderId}`);
+            if (res.ok) {
+              const ord = await res.json();
+              const badge = document.getElementById("active-order-status");
+              badge.className = `status-badge status-${ord.status}`;
+              badge.textContent = ord.status;
+              document.getElementById("active-order-progbar").style.width =
+                `${statusMap[ord.status] || 20}%`;
+
+              if (ord.status === "DELIVERED" || ord.status === "CANCELLED") {
+                clearInterval(state.activeOrderTimer);
+                loadOrderHistory();
+              }
+            }
+
+            // Verify with Payment Service
+            try {
+              const payRes = await fetch(`${PAYMENT_URL}/${orderId}`);
+              const payBadge = document.getElementById(
+                "active-order-payment-badge",
+              );
+              const payContainer = document.getElementById(
+                "active-order-pay-container",
+              );
+              if (payRes.ok && payBadge) {
+                const pay = await payRes.json();
+                if (pay.status === "PAID") {
+                  payBadge.className =
+                    "px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800";
+                  payBadge.textContent = `PAID ($${Number(pay.amount).toFixed(2)})`;
+                  if (payContainer) payContainer.innerHTML = "";
+                } else {
+                  payBadge.className =
+                    "px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800";
+                  payBadge.textContent = `PENDING ($${Number(pay.amount).toFixed(2)})`;
+                  if (
+                    payContainer &&
+                    !document.getElementById("btn-pay-order")
+                  ) {
+                    payContainer.innerHTML = `
+                      <button id="btn-pay-order" onclick="confirmAndPayOrder('${orderId}')" class="w-full mt-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded text-xs shadow transition">
+                        💳 Confirm &amp; Pay Order ($${Number(pay.amount).toFixed(2)})
+                      </button>
+                    `;
+                  }
+                }
+              }
+            } catch (err) {
+              // Ignore payment lookup error during fast poll
+            }
+          } catch (e) {
+            console.warn("Poll error", e);
+          }
+        }
+
+        poll();
+        state.activeOrderTimer = setInterval(poll, 1500);
+      }
+
+      async function confirmAndPayOrder(orderId) {
+        try {
+          const res = await fetch(PAYMENT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId }),
+          });
+          if (res.ok) {
+            const pay = await res.json();
+            const payBadge = document.getElementById(
+              "active-order-payment-badge",
+            );
+            if (payBadge) {
+              payBadge.className =
+                "px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800";
+              payBadge.textContent = `PAID ($${Number(pay.amount).toFixed(2)})`;
+            }
+            const payContainer = document.getElementById(
+              "active-order-pay-container",
+            );
+            if (payContainer) payContainer.innerHTML = "";
+            loadOrderHistory();
+            loadOperationsData();
+          } else {
+            alert("Payment confirmation failed.");
+          }
+        } catch (e) {
+          console.error("Payment error:", e);
+        }
+      }
+
+      // OPERATIONS PORTAL LOGIC
+      async function loadOperationsData() {
+        // 1. Kitchen orders (Priority: Earliest Orders First / FIFO)
+        try {
+          const [ordersRes, paymentsRes] = await Promise.all([
+            fetch(`${ORDER_URL}?sort=earliest`),
+            fetch(PAYMENT_URL).catch(() => null),
+          ]);
+
+          if (ordersRes.ok) {
+            const orders = await ordersRes.json();
+            const payments =
+              paymentsRes && paymentsRes.ok ? await paymentsRes.json() : [];
+            const payMap = new Map();
+            payments.forEach((p) => payMap.set(p.orderId, p));
+
+            const paidOrders = orders.filter(
+              (o) =>
+                o.status === "CONFIRMED" ||
+                o.status === "PREPARING" ||
+                o.status === "READY",
+            );
+            const otherOrders = orders.filter(
+              (o) =>
+                o.status !== "CONFIRMED" &&
+                o.status !== "PREPARING" &&
+                o.status !== "READY",
+            );
+            const sortedOrders = [...paidOrders, ...otherOrders];
+
+            document.getElementById("kitchen-order-count").textContent =
+              `${paidOrders.length} Paid / ${orders.length} Total`;
+            const container = document.getElementById("kitchen-orders-list");
+            container.innerHTML = sortedOrders
+              .map((o, idx) => {
+                const pay = payMap.get(o.id);
+                const isPaid =
+                  (pay && pay.status === "PAID") ||
+                  o.status === "CONFIRMED" ||
+                  o.status === "PREPARING" ||
+                  o.status === "READY" ||
+                  o.status === "DELIVERED";
+                const payBadge = isPaid
+                  ? `<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded">💳 PAID ($${Number(pay ? pay.amount : o.total).toFixed(2)})</span>`
+                  : `<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-medium rounded">💳 Payment Pending</span>`;
+
+                const priorityLabel =
+                  o.status === "CONFIRMED" || o.status === "PREPARING"
+                    ? `<span class="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200">Earliest Priority #${idx + 1}</span>`
+                    : "";
+
+                return `
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                  <span class="font-mono text-[11px] text-slate-500 truncate w-40">${escapeHtml(o.id)}</span>
+                  ${priorityLabel}
+                </div>
+                <div class="flex items-center space-x-1.5">
+                  ${payBadge}
+                  <span class="status-badge status-${escapeHtml(o.status)}">${escapeHtml(o.status)}</span>
+                </div>
+              </div>
+              <div class="text-xs text-slate-700">
+                ${(o.items || []).map((i) => `${i.qty}x ${escapeHtml(i.name)}`).join(", ")}
+              </div>
+              <div class="flex justify-between items-center text-xs pt-1 border-t border-slate-200">
+                <span class="font-bold text-slate-800">$${(o.total || 0).toFixed(2)}</span>
+                <div class="flex space-x-1.5">
+                  ${!isPaid ? `<button onclick="confirmAndPayOrder('${o.id}')" class="px-2 py-0.5 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-[10px] font-bold rounded">Pay</button>` : ""}
+                  <button onclick="updateOrderStatus('${o.id}', 'PREPARING')" class="px-2 py-0.5 bg-purple-100 text-purple-700 hover:bg-purple-200 text-[10px] font-semibold rounded">Preparing</button>
+                  <button onclick="updateOrderStatus('${o.id}', 'READY')" class="px-2 py-0.5 bg-cyan-100 text-cyan-700 hover:bg-cyan-200 text-[10px] font-semibold rounded">Ready</button>
+                </div>
+              </div>
+            </div>
+          `;
+              })
+              .join("");
+          }
+        } catch (e) {
+          console.error("Orders load failed:", e);
+        }
+
+        // 2. Deliveries (Priority: Most Recent Delivery First / LIFO)
+        try {
+          const res = await fetch(DELIVERY_URL);
+          if (res.ok) {
+            const deliveries = await res.json();
+            document.getElementById("deliveries-count").textContent =
+              deliveries.length;
+            const container = document.getElementById("driver-deliveries-list");
+            container.innerHTML = deliveries
+              .map(
+                (d, idx) => `
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                  <span class="font-semibold text-xs text-slate-800">Driver: ${escapeHtml(d.driver)}</span>
+                  ${d.status === "ASSIGNED" ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">Dispatch Priority #${idx + 1}</span>` : ""}
+                </div>
+                <span class="status-badge status-${escapeHtml(d.status)}">${escapeHtml(d.status)}</span>
+              </div>
+              <p class="text-[11px] text-slate-500 font-mono truncate">Order: ${escapeHtml(d.orderId)}</p>
+              ${
+                d.status !== "DELIVERED"
+                  ? `
+                <button onclick="completeDelivery('${d.orderId}')" class="w-full mt-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded text-xs transition">
+                  Mark Delivered (Priority #${idx + 1})
+                </button>
+              `
+                  : `
+                <div class="text-[11px] text-emerald-600 font-semibold text-center py-1">Delivery Completed</div>
+              `
+              }
+            </div>
+          `,
+              )
+              .join("");
+          }
+        } catch (e) {
+          console.error("Deliveries load failed:", e);
+        }
+      }
+
+      async function updateOrderStatus(orderId, status) {
+        try {
+          const res = await fetch(`${ORDER_URL}/${orderId}/status`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          });
+          if (res.ok) {
+            loadOperationsData();
+          }
+        } catch (e) {
+          console.error("Status update error", e);
+        }
+      }
+
+      async function completeDelivery(orderId) {
+        try {
+          const res = await fetch(`${DELIVERY_URL}/${orderId}/complete`, {
+            method: "PUT",
+          });
+          if (res.ok) {
+            loadOperationsData();
+          }
+        } catch (e) {
+          console.error("Delivery complete error", e);
+        }
+      }
+
+      // ADMIN REPORTS LOGIC
+      async function loadAdminReports() {
+        try {
+          const [sumRes, restRes, delRes, allRestsRes, payRes, notifRes] =
+            await Promise.all([
+              fetch(`${ADMIN_URL}/summary`),
+              fetch(`${ADMIN_URL}/restaurants`),
+              fetch(`${ADMIN_URL}/deliveries`),
+              fetch(RESTAURANT_URL),
+              fetch(PAYMENT_URL).catch(() => null),
+              fetch(NOTIFICATION_URL).catch(() => null),
+            ]);
+
+          if (sumRes.ok) {
+            const sum = await sumRes.json();
+            document.getElementById("kpi-total-orders").textContent =
+              sum.totalOrders || 0;
+            document.getElementById("kpi-total-deliveries").textContent =
+              sum.totalDeliveries || 0;
+          }
+
+          let restaurantMap = {};
+          if (allRestsRes.ok) {
+            const rests = await allRestsRes.json();
+            rests.forEach((r) => {
+              restaurantMap[r.id] = r.name;
+            });
+          }
+
+          if (restRes.ok) {
+            const restData = await restRes.json();
+            const counts = restData.orderCounts || {};
+            const revs = restData.revenue || {};
+            let totalRev = 0;
+
+            const tbody = document.getElementById("admin-restaurant-tbody");
+            const keys = Array.from(
+              new Set([...Object.keys(counts), ...Object.keys(revs)]),
+            );
+            if (keys.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-400">No restaurant sales recorded yet.</td></tr>`;
+            } else {
+              tbody.innerHTML = keys
+                .map((id) => {
+                  const name =
+                    restaurantMap[id] || `Restaurant ID: ${id.slice(0, 8)}...`;
+                  const ords = counts[id] || 0;
+                  const rev = revs[id] || 0;
+                  totalRev += rev;
+                  return `
+                <tr class="hover:bg-slate-50">
+                  <td class="py-2.5 px-3 font-medium text-slate-800">${name}</td>
+                  <td class="py-2.5 px-3 text-center">${ords}</td>
+                  <td class="py-2.5 px-3 text-right font-semibold text-slate-900">$${rev.toFixed(2)}</td>
+                </tr>
+              `;
+                })
+                .join("");
+            }
+            const revEl = document.getElementById("kpi-total-revenue");
+            if (revEl) revEl.textContent = `$${totalRev.toFixed(2)}`;
+          }
+
+          if (delRes.ok) {
+            const delData = await delRes.json();
+            const byStatus = delData.deliveriesByStatus || {};
+            const tbody = document.getElementById("admin-delivery-tbody");
+            const keys = Object.keys(byStatus);
+            if (keys.length === 0) {
+              tbody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-slate-400">No deliveries recorded yet.</td></tr>`;
+            } else {
+              tbody.innerHTML = keys
+                .map(
+                  (st) => `
+              <tr class="hover:bg-slate-50">
+                <td class="py-2.5 px-3"><span class="status-badge status-${st}">${st}</span></td>
+                <td class="py-2.5 px-3 text-right font-bold text-slate-800">${byStatus[st]}</td>
+              </tr>
+            `,
+                )
+                .join("");
+            }
+          }
+
+          // Payment Service Ledger
+          if (payRes && payRes.ok) {
+            const payments = await payRes.json();
+            let totalPaid = 0;
+            const payTbody = document.getElementById("admin-payment-tbody");
+            document.getElementById("admin-payments-count").textContent =
+              `${payments.length} settled`;
+
+            if (payments.length === 0) {
+              payTbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-400">No payment transactions recorded yet.</td></tr>`;
+            } else {
+              payTbody.innerHTML = payments
+                .map((p) => {
+                  totalPaid += Number(p.amount || 0);
+                  return `
+                <tr class="hover:bg-slate-50">
+                  <td class="py-2.5 px-3">
+                    <div class="font-mono text-slate-700 truncate w-40 font-semibold">${escapeHtml(p.id)}</div>
+                    <div class="font-mono text-slate-400 text-[10px] truncate w-40">Order: ${escapeHtml(p.orderId)}</div>
+                  </td>
+                  <td class="py-2.5 px-3 text-right font-bold text-slate-900">$${Number(p.amount || 0).toFixed(2)}</td>
+                  <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">${escapeHtml(p.status)}</span></td>
+                </tr>
+              `;
+                })
+                .join("");
+            }
+            document.getElementById("kpi-total-payments").textContent =
+              `$${totalPaid.toFixed(2)}`;
+          }
+
+          // Notification Service Audit Log
+          if (notifRes && notifRes.ok) {
+            const notes = await notifRes.json();
+            document.getElementById("kpi-total-notifications").textContent =
+              notes.length;
+            document.getElementById("admin-notifications-count").textContent =
+              `${notes.length} events`;
+            const notifTbody = document.getElementById(
+              "admin-notification-tbody",
+            );
+
+            if (notes.length === 0) {
+              notifTbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-slate-400">No events captured yet.</td></tr>`;
+            } else {
+              notifTbody.innerHTML = notes
+                .slice(0, 30)
+                .map(
+                  (n) => `
+                <tr class="hover:bg-slate-50">
+                  <td class="py-2 px-3 text-slate-500 whitespace-nowrap">${escapeHtml((n.timestamp || "").split("T")[1]?.slice(0, 8) || "Now")}</td>
+                  <td class="py-2 px-3"><span class="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">${escapeHtml(n.topic)}</span></td>
+                  <td class="py-2 px-3 text-slate-700 truncate max-w-xs" title="${escapeHtml(n.message)}">${escapeHtml(n.message)}</td>
+                </tr>
+              `,
+                )
+                .join("");
+            }
+          }
+        } catch (e) {
+          console.error("Admin load error", e);
+        }
+      }
+
+      // LIVE NOTIFICATIONS PORTAL LOGIC
+      async function loadNotificationsData() {
+        try {
+          const res = await fetch(NOTIFICATION_URL);
+          if (res.ok) {
+            state.notifications = await res.json();
+            renderNotifications();
+          }
+        } catch (e) {
+          console.warn("Notifications load failed:", e);
+        }
+      }
+
+      function filterNotifications() {
+        renderNotifications();
+      }
+
+      function renderNotifications() {
+        const select = document.getElementById("notif-filter-topic");
+        const filter = select ? select.value : "ALL";
+        const container = document.getElementById(
+          "notifications-live-container",
+        );
+        const countBadge = document.getElementById("live-notif-count-badge");
+        const headerPill = document.getElementById("header-notif-pill");
+
+        const list =
+          filter === "ALL"
+            ? state.notifications
+            : state.notifications.filter((n) => n.topic === filter);
+
+        if (headerPill) headerPill.textContent = state.notifications.length;
+        if (countBadge) countBadge.textContent = `${list.length} events`;
+
+        if (list.length === 0) {
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No notifications for topic '${escapeHtml(filter)}' yet.</p>`;
+          return;
+        }
+
+        const topicIcons = {
+          "orders.created": "📝",
+          "payments.completed": "💳",
+          "delivery.assigned": "🛵",
+          "delivery.completed": "🎉",
+        };
+
+        const topicColors = {
+          "orders.created": "border-amber-200 bg-amber-50/50",
+          "payments.completed": "border-emerald-200 bg-emerald-50/50",
+          "delivery.assigned": "border-blue-200 bg-blue-50/50",
+          "delivery.completed": "border-purple-200 bg-purple-50/50",
+        };
+
+        container.innerHTML = list
+          .map((n) => {
+            const icon = topicIcons[n.topic] || "🔔";
+            const borderBg =
+              topicColors[n.topic] || "border-slate-200 bg-slate-50";
+            let prettyJson = n.message;
+            try {
+              prettyJson = JSON.stringify(JSON.parse(n.message), null, 2);
+            } catch (err) {}
+
+            return `
+            <div class="p-4 rounded-xl border ${borderBg} space-y-2 transition shadow-xs">
+              <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-2">
+                  <span class="text-lg">${icon}</span>
+                  <span class="font-mono text-xs font-bold text-slate-800">${escapeHtml(n.topic)}</span>
+                </div>
+                <span class="text-[11px] text-slate-400 font-mono">${escapeHtml(n.timestamp || "Just now")}</span>
+              </div>
+              <pre class="bg-white/90 p-2.5 rounded-lg border border-slate-200/80 font-mono text-[11px] text-slate-700 overflow-x-auto">${escapeHtml(prettyJson)}</pre>
+            </div>
+          `;
+          })
+          .join("");
+      }
+
+      async function fetchLiveNotifCount() {
+        try {
+          const res = await fetch(NOTIFICATION_URL);
+          if (res.ok) {
+            state.notifications = await res.json();
+            const pill = document.getElementById("header-notif-pill");
+            if (pill) pill.textContent = state.notifications.length;
+            const liveBadge = document.getElementById("live-notif-count-badge");
+            if (
+              liveBadge &&
+              !document
+                .getElementById("panel-notifications")
+                .classList.contains("hidden")
+            ) {
+              renderNotifications();
+            }
+          }
+        } catch (e) {
+          // Silent polling fail
+        }
+      }
+
+      // Initialization
+      window.addEventListener("DOMContentLoaded", () => {
+        refreshCustomerData();
+        fetchLiveNotifCount();
+        setInterval(fetchSurge, 5000); // Polling surge pricing every 5s
+        setInterval(fetchLiveNotifCount, 4000); // Polling notifications every 4s
+      });
+    </script>
+  </body>
 </html>
